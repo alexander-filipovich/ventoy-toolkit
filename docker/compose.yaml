@@ -1,0 +1,9 @@
+services:
+  ventoy:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+    image: ventoy-wrapper:dev
+    working_dir: /workspace
+    volumes:
+      - ..:/workspace
