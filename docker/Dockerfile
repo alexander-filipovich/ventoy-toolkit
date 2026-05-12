@@ -11,6 +11,10 @@ RUN apt-get update \
        tar \
        xz-utils \
        util-linux \
+       fdisk \
+       parted \
+       dosfstools \
+       udev \
        coreutils \
     && rm -rf /var/lib/apt/lists/*
 
