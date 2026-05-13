@@ -1,0 +1,10 @@
+#!/usr/bin/env sh
+set -eu
+
+# Ventoy checks for the legacy mkexfatfs name.
+# Debian exfatprogs provides the same formatter as mkfs.exfat.
+if [ "${1:-}" = "-V" ]; then
+  exit 0
+fi
+
+exec mkfs.exfat "$@"

@@ -14,3 +14,5 @@
 ## Container Requirements
 - Docker Desktop
 - `docker compose`
+- Ventoy version is pinned in `docker/Dockerfile`
+- Ventoy tooling container runs as `linux/amd64`
