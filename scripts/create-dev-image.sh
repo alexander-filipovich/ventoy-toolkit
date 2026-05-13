@@ -73,7 +73,7 @@ echo "[create-dev-image] margin_mib=${MARGIN_MIB}" >&2
 
 if ((DRY_RUN)); then
   echo "[create-dev-image] dry-run: truncate -s ${TARGET_BYTES} ${OUTPUT_ABS}" >&2
-  echo "[create-dev-image] dry-run: docker run --rm --privileged --entrypoint bash -v /dev:/dev -v ${PROJECT_ROOT}:/workspace -w /workspace ventoy-wrapper:dev -lc '<losetup + ventoy + fdisk>'" >&2
+  echo "[create-dev-image] dry-run: docker run --rm --privileged --entrypoint bash -v /dev:/dev -v ${PROJECT_ROOT}:/workspace -w /workspace ventoy-wrapper:dev -lc '<losetup + ventoy -I -s + fdisk>'" >&2
   exit 0
 fi
 
@@ -83,7 +83,7 @@ truncate -s "${TARGET_BYTES}" "${OUTPUT_ABS}"
 
 docker run --rm --privileged --entrypoint bash \
   -v /dev:/dev -v "${PROJECT_ROOT}:/workspace" -w /workspace ventoy-wrapper:dev \
-  -lc "set -euo pipefail; LOOP_DEV=\$(losetup --find --show \"${OUTPUT_REL}\"); trap 'losetup -d \"\$LOOP_DEV\"' EXIT; printf 'y\ny\n' | ventoy -I \"\$LOOP_DEV\"; fdisk -l \"\$LOOP_DEV\" >/dev/null"
+  -lc "set -euo pipefail; LOOP_DEV=\$(losetup --find --show \"${OUTPUT_REL}\"); trap 'losetup -d \"\$LOOP_DEV\"' EXIT; printf 'y\ny\n' | ventoy -I -s \"\$LOOP_DEV\"; fdisk -l \"\$LOOP_DEV\" >/dev/null"
 
 IMAGE_LOGICAL_BYTES="$(stat -f%z "${OUTPUT_ABS}")"
 IMAGE_ALLOCATED_BYTES="$(( $(du -k "${OUTPUT_ABS}" | awk '{print $1}') * 1024 ))"
