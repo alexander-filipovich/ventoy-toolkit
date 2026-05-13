@@ -27,6 +27,17 @@ human_speed() {
     printf "%.0f B/s", s
   }'
 }
+human_eta() {
+  awk -v bytes="$1" -v total="$2" -v secs="$3" 'BEGIN{
+    if (secs <= 0 || bytes <= 0 || total <= bytes) { print "00:00:00"; exit }
+    remain = total - bytes
+    eta = int(remain / (bytes / secs))
+    h = int(eta / 3600)
+    m = int((eta % 3600) / 60)
+    s = eta % 60
+    printf "%02d:%02d:%02d", h, m, s
+  }'
+}
 
 usage() {
   cat >&2 <<'EOF'
@@ -95,10 +106,10 @@ IMAGE_BYTES="$(stat -f%z "${IMAGE}")"
 (( IMAGE_BYTES <= DISK_BYTES )) || fail "image is larger than disk (${IMAGE_BYTES} > ${DISK_BYTES})"
 
 log "image=${IMAGE}"
-log "image_bytes=${IMAGE_BYTES}"
+log "image_size=$(human_bytes "${IMAGE_BYTES}") (${IMAGE_BYTES} B)"
 log "disk=${DISK_NODE}"
 log "raw_disk=${RAW_DISK_NODE}"
-log "disk_bytes=${DISK_BYTES}"
+log "disk_size=$(human_bytes "${DISK_BYTES}") (${DISK_BYTES} B)"
 log "mode=${MODE}"
 log "bs=${BS}"
 
@@ -132,10 +143,11 @@ dd if="${IMAGE}" of="${RAW_DISK_NODE}" bs="${BS}" conv=sync \
         bytes_h="$(human_bytes "${bytes}")"
         total_h="$(human_bytes "${IMAGE_BYTES}")"
         speed_h="$(human_speed "${bytes}" "${secs}")"
-        printf '\r[write-image] progress=%3d%% transferred=%s/%s speed=%s' "${pct}" "${bytes_h}" "${total_h}" "${speed_h}" >&2
+        eta_h="$(human_eta "${bytes}" "${IMAGE_BYTES}" "${secs}")"
+        printf '\r\033[K[write-image] progress=%3d%% transferred=%s/%s speed=%s eta=%s' "${pct}" "${bytes_h}" "${total_h}" "${speed_h}" "${eta_h}" >&2
       fi
     done
-    printf '\n' >&2
+    printf '\r\033[K\n' >&2
   ) &
 DD_PID=$!
 while kill -0 "${DD_PID}" 2>/dev/null; do
