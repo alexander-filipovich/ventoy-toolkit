@@ -3,7 +3,7 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
-BIN_PATH="${PROJECT_ROOT}/bin/list-disks"
+source "${SCRIPT_DIR}/go-target.sh"
 MODE="binary"
 
 usage() {
@@ -22,21 +22,7 @@ esac
 [[ $# -le 1 ]] || { usage; echo "Error: too many arguments" >&2; exit 1; }
 
 cd "${PROJECT_ROOT}"
-run_selector() {
-  if [[ "${MODE}" == "source" ]]; then
-    go run ./cmd/list-disks
-    return
-  fi
-
-  if [[ -x "${BIN_PATH}" ]]; then
-    "${BIN_PATH}"
-    return
-  fi
-
-  go run ./cmd/list-disks
-}
-
-selected_line="$(run_selector)"
+selected_line="$(run_go_target "list-disks" "${MODE}")"
 selected_disk="$(printf '%s' "${selected_line}" | tr -d '\r' | sed -e 's/[[:space:]]*$//')"
 [[ "${selected_disk}" =~ ^/dev/disk[0-9]+$ ]] || { echo "Error: selector returned unexpected value: ${selected_disk}" >&2; exit 1; }
 printf '%s\n' "${selected_disk}"
