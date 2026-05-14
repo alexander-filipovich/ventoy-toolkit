@@ -10,6 +10,7 @@ SIZE_BYTES=""
 OUTPUT="./artifacts/ventoy-dev.img"
 MARGIN_MIB=128
 DRY_RUN=0
+METADATA_PATH=""
 
 fail() { echo "[create-dev-image][error] $*" >&2; exit 1; }
 usage() {
@@ -65,6 +66,7 @@ OUTPUT_ABS="${OUTPUT}"
 [[ "${OUTPUT_ABS}" == /* ]] || OUTPUT_ABS="${PROJECT_ROOT}/${OUTPUT_ABS}"
 OUTPUT_REL="${OUTPUT_ABS#${PROJECT_ROOT}/}"
 [[ "${OUTPUT_REL}" != "${OUTPUT_ABS}" ]] || fail "output path must be inside project root: ${PROJECT_ROOT}"
+METADATA_PATH="${OUTPUT_ABS}.write-map.json"
 
 echo "[create-dev-image] disk_bytes=${SIZE_BYTES}" >&2
 echo "[create-dev-image] target_bytes=${TARGET_BYTES}" >&2
@@ -74,6 +76,7 @@ echo "[create-dev-image] margin_mib=${MARGIN_MIB}" >&2
 if ((DRY_RUN)); then
   echo "[create-dev-image] dry-run: truncate -s ${TARGET_BYTES} ${OUTPUT_ABS}" >&2
   echo "[create-dev-image] dry-run: docker run --rm --privileged --entrypoint bash -v /dev:/dev -v ${PROJECT_ROOT}:/workspace -w /workspace ventoy-wrapper:dev -lc '<losetup + ventoy -I -s + fdisk>'" >&2
+  echo "[create-dev-image] dry-run: write metadata to ${METADATA_PATH}" >&2
   exit 0
 fi
 
@@ -91,6 +94,25 @@ IMAGE_ALLOCATED_BYTES="$(( $(du -k "${OUTPUT_ABS}" | awk '{print $1}') * 1024 ))
 [[ "${IMAGE_ALLOCATED_BYTES}" =~ ^[0-9]+$ ]] || fail "failed to read allocated image size"
 (( IMAGE_ALLOCATED_BYTES > 0 )) || fail "image allocated bytes is zero; Ventoy installation likely failed"
 
+PARTITION_JSON="$(docker run --rm --privileged --entrypoint bash \
+  -v /dev:/dev -v "${PROJECT_ROOT}:/workspace" -w /workspace ventoy-wrapper:dev \
+  -lc "set -euo pipefail; LOOP_DEV=\$(losetup --find --show \"${OUTPUT_REL}\"); trap 'losetup -d \"\$LOOP_DEV\"' EXIT; sfdisk -J \"\$LOOP_DEV\"")"
+[[ -n "${PARTITION_JSON}" ]] || fail "failed to capture partition metadata"
+
+cat > "${METADATA_PATH}" <<EOF
+{
+  "schema": "ventoy-dev-image-write-map/v1",
+  "image_path": "${OUTPUT_REL}",
+  "disk_bytes": ${SIZE_BYTES},
+  "target_bytes": ${TARGET_BYTES},
+  "image_logical_bytes": ${IMAGE_LOGICAL_BYTES},
+  "image_allocated_bytes": ${IMAGE_ALLOCATED_BYTES},
+  "partition_table":
+EOF
+printf '%s\n' "${PARTITION_JSON}" >> "${METADATA_PATH}"
+echo "}" >> "${METADATA_PATH}"
+
 echo "[create-dev-image] image_logical_bytes=${IMAGE_LOGICAL_BYTES}" >&2
 echo "[create-dev-image] image_allocated_bytes=${IMAGE_ALLOCATED_BYTES}" >&2
+echo "[create-dev-image] write_map=${METADATA_PATH}" >&2
 echo "[create-dev-image] status=success" >&2
