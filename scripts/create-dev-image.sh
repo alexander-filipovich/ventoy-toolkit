@@ -4,6 +4,7 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
 COMPOSE_FILE="${PROJECT_ROOT}/docker/compose.yaml"
+source "${SCRIPT_DIR}/go-target.sh"
 
 DISK=""
 SIZE_BYTES=""
@@ -76,7 +77,8 @@ echo "[create-dev-image] margin_mib=${MARGIN_MIB}" >&2
 if ((DRY_RUN)); then
   echo "[create-dev-image] dry-run: truncate -s ${TARGET_BYTES} ${OUTPUT_ABS}" >&2
   echo "[create-dev-image] dry-run: docker run --rm --privileged --entrypoint bash -v /dev:/dev -v ${PROJECT_ROOT}:/workspace -w /workspace ventoy-wrapper:dev -lc '<losetup + ventoy -I -s + fdisk>'" >&2
-  echo "[create-dev-image] dry-run: write metadata to ${METADATA_PATH}" >&2
+  echo "[create-dev-image] dry-run: run image-extents tool (bin or source) for ${OUTPUT_ABS}" >&2
+  echo "[create-dev-image] dry-run: write metadata v2 to ${METADATA_PATH}" >&2
   exit 0
 fi
 
@@ -99,18 +101,23 @@ PARTITION_JSON="$(docker run --rm --privileged --entrypoint bash \
   -lc "set -euo pipefail; LOOP_DEV=\$(losetup --find --show \"${OUTPUT_REL}\"); trap 'losetup -d \"\$LOOP_DEV\"' EXIT; sfdisk -J \"\$LOOP_DEV\"")"
 [[ -n "${PARTITION_JSON}" ]] || fail "failed to capture partition metadata"
 
-cat > "${METADATA_PATH}" <<EOF
-{
-  "schema": "ventoy-dev-image-write-map/v1",
-  "image_path": "${OUTPUT_REL}",
-  "disk_bytes": ${SIZE_BYTES},
-  "target_bytes": ${TARGET_BYTES},
-  "image_logical_bytes": ${IMAGE_LOGICAL_BYTES},
-  "image_allocated_bytes": ${IMAGE_ALLOCATED_BYTES},
-  "partition_table":
-EOF
-printf '%s\n' "${PARTITION_JSON}" >> "${METADATA_PATH}"
-echo "}" >> "${METADATA_PATH}"
+PARTITION_JSON_PATH="$(mktemp)"
+printf '%s\n' "${PARTITION_JSON}" > "${PARTITION_JSON_PATH}"
+trap 'rm -f "${PARTITION_JSON_PATH}"' EXIT
+
+GO_TOOL_MODE="${GO_TOOL_MODE:-binary}"
+run_go_target image-extents "${GO_TOOL_MODE}" \
+  --image "${OUTPUT_ABS}" \
+  --json \
+  --emit-write-map \
+  --image-path "${OUTPUT_REL}" \
+  --disk-bytes "${SIZE_BYTES}" \
+  --target-bytes "${TARGET_BYTES}" \
+  --image-allocated-bytes "${IMAGE_ALLOCATED_BYTES}" \
+  --partition-json "${PARTITION_JSON_PATH}" \
+  > "${METADATA_PATH}"
+rm -f "${PARTITION_JSON_PATH}"
+trap - EXIT
 
 echo "[create-dev-image] image_logical_bytes=${IMAGE_LOGICAL_BYTES}" >&2
 echo "[create-dev-image] image_allocated_bytes=${IMAGE_ALLOCATED_BYTES}" >&2
