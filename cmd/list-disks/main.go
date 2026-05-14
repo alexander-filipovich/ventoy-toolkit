@@ -14,7 +14,8 @@ func main() {
 	candidates := must(listExternalPhysicalCandidates())
 	selected := must(promptSelection(candidates))
 
-	fmt.Printf("%s\t%s\t%s\n", selected.DiskPath, selected.SizeHuman, selected.Name)
+	fmt.Fprintf(os.Stderr, "%s\t%s\t%s\n", selected.DiskPath, selected.SizeHuman, selected.Name)
+	fmt.Println(selected.DiskPath)
 }
 
 func must[T any](v T, err error) T {

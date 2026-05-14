@@ -22,12 +22,21 @@ esac
 [[ $# -le 1 ]] || { usage; echo "Error: too many arguments" >&2; exit 1; }
 
 cd "${PROJECT_ROOT}"
-if [[ "${MODE}" == "source" ]]; then
-  exec go run ./cmd/list-disks
-fi
+run_selector() {
+  if [[ "${MODE}" == "source" ]]; then
+    go run ./cmd/list-disks
+    return
+  fi
 
-if [[ -x "${BIN_PATH}" ]]; then
-  exec "${BIN_PATH}"
-fi
+  if [[ -x "${BIN_PATH}" ]]; then
+    "${BIN_PATH}"
+    return
+  fi
 
-exec go run ./cmd/list-disks
+  go run ./cmd/list-disks
+}
+
+selected_line="$(run_selector)"
+selected_disk="$(printf '%s' "${selected_line}" | tr -d '\r' | sed -e 's/[[:space:]]*$//')"
+[[ "${selected_disk}" =~ ^/dev/disk[0-9]+$ ]] || { echo "Error: selector returned unexpected value: ${selected_disk}" >&2; exit 1; }
+printf '%s\n' "${selected_disk}"
