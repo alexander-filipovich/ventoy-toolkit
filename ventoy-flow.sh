@@ -6,6 +6,7 @@ PROJECT_ROOT="${SCRIPT_DIR}"
 SCRIPTS_DIR="${PROJECT_ROOT}/scripts"
 ARTIFACTS_DIR="${PROJECT_ROOT}/artifacts"
 SESSION_FILE="${ARTIFACTS_DIR}/.flow-session.env"
+source "${SCRIPTS_DIR}/go-target.sh"
 
 DEFAULT_OUTPUT="./artifacts/ventoy-dev.img"
 
@@ -14,7 +15,6 @@ SESSION_CMD=""
 DISK=""
 IMAGE=""
 OUTPUT=""
-MARGIN_MIB=""
 SIZE=""
 SIZE_BYTES=""
 CONFIRM=""
@@ -34,18 +34,18 @@ usage() {
   cat >&2 <<'EOF_USAGE'
 Usage:
   ./ventoy-flow.sh select [--dry-run]
-  ./ventoy-flow.sh create [--disk /dev/diskN] [--size 12g | --size-bytes N] [--output PATH] [--margin-mib N] [--dry-run]
+  ./ventoy-flow.sh create [--size 128m | --size-bytes N] [--output PATH] [--dry-run]
+  ./ventoy-flow.sh parse [--image PATH] [--dry-run]
   ./ventoy-flow.sh write [--disk /dev/diskN] [--image PATH] [--confirm diskN] [--dry-run]
-  ./ventoy-flow.sh all [--output PATH] [--margin-mib N] [--confirm diskN] [--dry-run]
+  ./ventoy-flow.sh all [--output PATH] [--confirm diskN] [--dry-run]
   ./ventoy-flow.sh session show|reset
 
 Options:
   --disk /dev/diskN|diskN
   --image PATH
   --output PATH
-  --margin-mib N
-  --size VALUE          Size with suffix: Ng, Nm, Nk, Nb (e.g. 12g)
-  --size-bytes N
+  --size VALUE          Exact image size with suffix: Ng, Nm, Nk, Nb (e.g. 128m)
+  --size-bytes N        Exact image size in bytes
   --confirm diskN
   --dry-run
   -h, --help
@@ -177,16 +177,11 @@ run_select() {
 }
 
 run_create() {
-  local create_disk=""
-  local session_disk_candidate=""
   local effective_size_bytes=""
   local has_size_source=0
   local create_args=()
 
-  if [[ -n "$DISK" ]]; then
-    session_disk_candidate="$(normalize_disk "$DISK")"
-    SESSION_DISK="$session_disk_candidate"
-  fi
+  [[ -z "$DISK" ]] || fail "--disk is used by select/write, not create"
 
   if [[ -n "$SIZE" && -n "$SIZE_BYTES" ]]; then
     fail "use only one explicit size flag: --size OR --size-bytes"
@@ -205,15 +200,7 @@ run_create() {
     create_args+=(--size-bytes "$effective_size_bytes")
     SESSION_SIZE_BYTES="$effective_size_bytes"
   else
-    if [[ -n "$session_disk_candidate" ]]; then
-      create_disk="$session_disk_candidate"
-    elif [[ -n "$SESSION_DISK" ]]; then
-      create_disk="$SESSION_DISK"
-    else
-      fail "create needs either disk context (--disk or prior select) or explicit size (--size/--size-bytes)"
-    fi
-    create_args+=(--disk "$create_disk")
-    SESSION_DISK="$create_disk"
+    log "create size not set, using create-dev-image default"
     SESSION_SIZE_BYTES=""
   fi
 
@@ -222,10 +209,6 @@ run_create() {
     SESSION_IMAGE="$OUTPUT"
   else
     SESSION_IMAGE="$DEFAULT_OUTPUT"
-  fi
-
-  if [[ -n "$MARGIN_MIB" ]]; then
-    create_args+=(--margin-mib "$MARGIN_MIB")
   fi
 
   if (( DRY_RUN )); then
@@ -273,9 +256,30 @@ run_write() {
   "${SCRIPTS_DIR}/write-image.sh" "${write_args[@]}"
 }
 
+run_parse() {
+  local parse_image=""
+
+  if [[ -n "$IMAGE" ]]; then
+    parse_image="$IMAGE"
+  elif [[ -n "$SESSION_IMAGE" ]]; then
+    parse_image="$SESSION_IMAGE"
+  else
+    parse_image="$DEFAULT_OUTPUT"
+  fi
+
+  if (( DRY_RUN )); then
+    log "dry-run: image-extents --image ${parse_image}"
+    return
+  fi
+
+  [[ -f "$parse_image" ]] || fail "image not found: ${parse_image}"
+  run_go_target image-extents "${GO_TOOL_MODE:-binary}" \
+    --image "$parse_image" \
+    --image-path "$parse_image"
+}
+
 run_all() {
   run_select
-  DISK="$SESSION_DISK"
   run_create
   IMAGE="$SESSION_IMAGE"
   run_write
@@ -303,13 +307,12 @@ fi
 
 while (($#)); do
   case "$1" in
-    --disk|--image|--output|--margin-mib|--size|--size-bytes|--confirm)
+    --disk|--image|--output|--size|--size-bytes|--confirm)
       (($# >= 2)) || fail "$1 requires a value"
       case "$1" in
         --disk) DISK="$2" ;;
         --image) IMAGE="$2" ;;
         --output) OUTPUT="$2" ;;
-        --margin-mib) MARGIN_MIB="$2" ;;
         --size) SIZE="$2" ;;
         --size-bytes) SIZE_BYTES="$2" ;;
         --confirm) CONFIRM="$2" ;;
@@ -339,6 +342,9 @@ case "$CMD" in
     ;;
   create)
     run_create
+    ;;
+  parse)
+    run_parse
     ;;
   write)
     run_write
