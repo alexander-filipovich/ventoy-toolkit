@@ -10,11 +10,14 @@ import (
 func main() {
 	image := flag.String("image", "", "Path to sparse image")
 	imagePath := flag.String("image-path", "", "Image path stored in the write map")
-	forceFallback := flag.Bool("force-fallback", false, "Force full-range fallback (testing)")
+	partitionJSON := flag.String("partition-json", "", "Path to sfdisk -J partition JSON")
 	flag.Parse()
 
 	if *image == "" {
 		fail("--image is required")
+	}
+	if *partitionJSON == "" {
+		fail("--partition-json is required")
 	}
 	if *imagePath == "" {
 		*imagePath = *image
@@ -24,16 +27,21 @@ func main() {
 	if err != nil {
 		fail(err.Error())
 	}
-	ranges, status, warning := scanExtents(*image, logicalBytes, *forceFallback)
+	partitions, err := readPartitionTable(*partitionJSON)
+	if err != nil {
+		fail(fmt.Sprintf("partition table unavailable: %v", err))
+	}
+	zones, err := buildDerivedZones(partitions)
+	if err != nil {
+		fail(fmt.Sprintf("derived zones unavailable: %v", err))
+	}
 
 	m := writeMap{
 		Schema:            "ventoy-dev-image-write-map",
 		ImagePath:         *imagePath,
 		ImageLogicalBytes: logicalBytes,
-		ExtentsStatus:     status,
-		RawExtents:        ranges,
-		ExpansionHole:     findExpansionHole(logicalBytes, ranges),
-		Warning:           warning,
+		PartitionTable:    partitions,
+		DerivedZones:      zones,
 	}
 
 	enc := json.NewEncoder(os.Stdout)

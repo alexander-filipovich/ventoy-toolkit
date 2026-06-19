@@ -6,6 +6,7 @@ PROJECT_ROOT="${SCRIPT_DIR}"
 SCRIPTS_DIR="${PROJECT_ROOT}/scripts"
 ARTIFACTS_DIR="${PROJECT_ROOT}/artifacts"
 SESSION_FILE="${ARTIFACTS_DIR}/.flow-session.env"
+COMPOSE_FILE="${PROJECT_ROOT}/docker/compose.yaml"
 source "${SCRIPTS_DIR}/go-target.sh"
 
 DEFAULT_OUTPUT="./artifacts/ventoy-dev.img"
@@ -226,6 +227,7 @@ run_create() {
 run_write() {
   local write_disk=""
   local write_image=""
+  local write_map=""
   local write_args=()
 
   if [[ -n "$DISK" ]]; then
@@ -246,7 +248,10 @@ run_write() {
     fail "write needs --image or a session image; run create first or pass --image"
   fi
 
-  write_args+=(--disk "$write_disk" --image "$write_image")
+  write_map="${write_image}.write-map.json"
+  [[ -f "$write_map" ]] || fail "write map not found: ${write_map}; run create/parse first"
+
+  write_args+=(--disk "$write_disk" --map "$write_map")
   if [[ -n "$CONFIRM" ]]; then
     write_args+=(--confirm "$CONFIRM")
   fi
@@ -257,11 +262,15 @@ run_write() {
   SESSION_DISK="$write_disk"
   SESSION_IMAGE="$write_image"
   save_session
-  "${SCRIPTS_DIR}/write-image.sh" "${write_args[@]}"
+  "${SCRIPTS_DIR}/write-image-map.sh" "${write_args[@]}"
 }
 
 run_parse() {
   local parse_image=""
+  local parse_image_abs=""
+  local parse_image_rel=""
+  local partition_json_abs=""
+  local partition_json_rel=""
 
   if [[ -n "$IMAGE" ]]; then
     parse_image="$IMAGE"
@@ -272,14 +281,33 @@ run_parse() {
   fi
 
   if (( DRY_RUN )); then
-    log "dry-run: image-extents --image ${parse_image}"
+    log "dry-run: docker run ... sfdisk -J ${parse_image}"
+    log "dry-run: image-extents --image ${parse_image} --partition-json <tmp>"
     return
   fi
 
   [[ -f "$parse_image" ]] || fail "image not found: ${parse_image}"
+  parse_image_abs="$parse_image"
+  [[ "$parse_image_abs" == /* ]] || parse_image_abs="${PROJECT_ROOT}/${parse_image_abs}"
+  parse_image_rel="${parse_image_abs#${PROJECT_ROOT}/}"
+  [[ "$parse_image_rel" != "$parse_image_abs" ]] || fail "image path must be inside project root: ${PROJECT_ROOT}"
+
+  command -v docker >/dev/null 2>&1 || fail "docker not found"
+  docker compose version >/dev/null 2>&1 || fail "docker compose is not available"
+  docker compose -f "${COMPOSE_FILE}" build ventoy >/dev/null
+
+  partition_json_abs="${parse_image_abs}.partition.json.tmp"
+  partition_json_rel="${partition_json_abs#${PROJECT_ROOT}/}"
+  rm -f "$partition_json_abs"
+  docker run --rm --privileged --entrypoint bash \
+    -v /dev:/dev -v "${PROJECT_ROOT}:/workspace" -w /workspace ventoy-wrapper:dev \
+    -lc "set -euo pipefail; LOOP_DEV=\$(losetup --find --show \"${parse_image_rel}\"); trap 'losetup -d \"\$LOOP_DEV\"' EXIT; sfdisk -J \"\$LOOP_DEV\" > \"${partition_json_rel}\""
+
   run_go_target image-extents "${GO_TOOL_MODE:-binary}" \
-    --image "$parse_image" \
-    --image-path "$parse_image"
+    --image "$parse_image_abs" \
+    --image-path "$parse_image" \
+    --partition-json "$partition_json_abs"
+  rm -f "$partition_json_abs"
 }
 
 run_all() {
