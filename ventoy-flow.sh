@@ -216,7 +216,11 @@ run_create() {
   fi
 
   save_session
-  "${SCRIPTS_DIR}/create-dev-image.sh" "${create_args[@]}"
+  if ((${#create_args[@]})); then
+    "${SCRIPTS_DIR}/create-dev-image.sh" "${create_args[@]}"
+  else
+    "${SCRIPTS_DIR}/create-dev-image.sh"
+  fi
 }
 
 run_write() {
