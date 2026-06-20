@@ -2,3 +2,4 @@ plans/
 artifacts/
 /bin/
 .cache/
+.DS_Store
