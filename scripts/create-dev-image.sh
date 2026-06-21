@@ -4,11 +4,10 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
 COMPOSE_FILE="${PROJECT_ROOT}/docker/compose.yaml"
-source "${SCRIPT_DIR}/go-target.sh"
 
 SIZE_BYTES=""
 OUTPUT="./artifacts/ventoy-dev.img"
-DEFAULT_TARGET_MIB=128
+DEFAULT_TARGET_MIB=64
 DRY_RUN=0
 METADATA_PATH=""
 
@@ -62,7 +61,7 @@ echo "[create-dev-image] output=${OUTPUT_ABS}" >&2
 if ((DRY_RUN)); then
   echo "[create-dev-image] dry-run: truncate -s ${TARGET_BYTES} ${OUTPUT_ABS}" >&2
   echo "[create-dev-image] dry-run: docker run --rm --privileged --entrypoint bash -v /dev:/dev -v ${PROJECT_ROOT}:/workspace -w /workspace ventoy-wrapper:dev -lc '<losetup + ventoy -I -s + sfdisk -J>'" >&2
-  echo "[create-dev-image] dry-run: run image-extents tool with ${PARTITION_JSON_ABS}" >&2
+  echo "[create-dev-image] dry-run: go run ./cmd/ventoyctl map-image --image ${OUTPUT_ABS} --partition-json ${PARTITION_JSON_ABS}" >&2
   echo "[create-dev-image] dry-run: write metadata to ${METADATA_PATH}" >&2
   exit 0
 fi
@@ -86,12 +85,14 @@ IMAGE_ALLOCATED_BYTES="$(( $(du -k "${OUTPUT_ABS}" | awk '{print $1}') * 1024 ))
 [[ "${IMAGE_ALLOCATED_BYTES}" =~ ^[0-9]+$ ]] || fail "failed to read allocated image size"
 (( IMAGE_ALLOCATED_BYTES > 0 )) || fail "image allocated bytes is zero; Ventoy installation likely failed"
 
-GO_TOOL_MODE="${GO_TOOL_MODE:-binary}"
-run_go_target image-extents "${GO_TOOL_MODE}" \
-  --image "${OUTPUT_ABS}" \
-  --image-path "${OUTPUT_REL}" \
-  --partition-json "${PARTITION_JSON_ABS}" \
-  > "${METADATA_PATH}"
+(
+  cd "${PROJECT_ROOT}"
+  GOCACHE="${GOCACHE:-${PROJECT_ROOT}/.cache/go-build}" go run ./cmd/ventoyctl map-image \
+    --image "${OUTPUT_ABS}" \
+    --image-path "${OUTPUT_REL}" \
+    --partition-json "${PARTITION_JSON_ABS}" \
+    > "${METADATA_PATH}"
+)
 
 echo "[create-dev-image] image_logical_bytes=${IMAGE_LOGICAL_BYTES}" >&2
 echo "[create-dev-image] image_allocated_bytes=${IMAGE_ALLOCATED_BYTES}" >&2
