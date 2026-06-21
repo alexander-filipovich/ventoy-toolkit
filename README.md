@@ -166,7 +166,7 @@ The write operation is still destructive. If you confirm the wrong disk, data on
 | Tool | Approach | Strength | Tradeoff |
 | --- | --- | --- | --- |
 | [Official Ventoy](https://www.ventoy.net/) | Native installer for Windows/Linux | Canonical behavior and broad feature support | No native macOS installer flow |
-| [VentoyDocker](https://github.com/garybowers/iventoy_docker) | Runs official Ventoy in Docker and exposes the USB through NBD/QEMU | Keeps official Ventoy writing the disk | Complex I/O path: macOS raw disk → NBD/QEMU → Docker |
+| [VentoyDocker](https://github.com/Mr-Sunglasses/VentoyDocker) | Runs official Ventoy in Docker and exposes the USB through NBD/QEMU | Keeps official Ventoy writing the disk | Complex I/O path: macOS raw disk → NBD/QEMU → Docker |
 | [ventoy-macos-install](https://gist.github.com/VladimirMakaev/93503ab7c63c7bf4b0cada5db726614a) | Direct macOS proof-of-concept that writes layout, boot code, and EFI image | Small terminal PoC without Docker/VM | Reimplements Ventoy layout details directly |
 | [Mactoy](https://github.com/cashcon57/mactoy) | Polished native macOS app built around the direct-layout lineage | Best GUI/end-user product | Larger product surface: GUI, helper, permissions, layout implementation |
 | Ventoy Toolkit | Official reference image + small MBR transplant writer | Small auditable CLI/core with fewer layout assumptions | MBR-only, no GUI, no update-in-place |
