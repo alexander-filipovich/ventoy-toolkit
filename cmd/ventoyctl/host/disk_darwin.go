@@ -39,8 +39,13 @@ func ListExternalDisks() ([]Disk, error) {
 		return nil, fmt.Errorf("failed to parse disk list: %w", err)
 	}
 
-	disks := make([]Disk, 0, len(result.WholeDisks))
-	for _, id := range result.WholeDisks {
+	ids := result.WholeDisks
+	if len(ids) == 0 {
+		ids = result.AllDisks
+	}
+
+	disks := make([]Disk, 0, len(ids))
+	for _, id := range ids {
 		info, err := readDiskInfo(id)
 		if err != nil || !info.WholeDisk {
 			continue
@@ -68,6 +73,9 @@ func SelectDisk(stdin io.Reader, stderr io.Writer, dryRun bool) (string, error) 
 	disks, err := ListExternalDisks()
 	if err != nil {
 		return "", err
+	}
+	if len(disks) == 0 {
+		return "", fmt.Errorf("no external physical disks found")
 	}
 	for _, disk := range disks {
 		fmt.Fprintf(stderr, "%s\t%s\t%s\n", disk.Path, disk.SizeHuman, disk.Name)

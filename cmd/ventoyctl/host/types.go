@@ -2,6 +2,7 @@ package host
 
 type diskListResult struct {
 	WholeDisks []string `json:"WholeDisks"`
+	AllDisks   []string `json:"AllDisks"`
 }
 
 type diskInfo struct {
