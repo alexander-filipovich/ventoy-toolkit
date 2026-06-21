@@ -1,4 +1,4 @@
-package main
+package ventoy
 
 import (
 	"encoding/json"
@@ -21,7 +21,7 @@ type sfdiskJSON struct {
 }
 
 func BuildWriteMap(image, imagePath, partitionJSON string) (WriteMap, error) {
-	logicalBytes, err := fileSize(image)
+	logicalBytes, err := FileSize(image)
 	if err != nil {
 		return WriteMap{}, err
 	}
@@ -37,7 +37,7 @@ func BuildWriteMap(image, imagePath, partitionJSON string) (WriteMap, error) {
 		imagePath = image
 	}
 	return WriteMap{
-		Schema:            mapSchema,
+		Schema:            MapSchema,
 		ImagePath:         imagePath,
 		ImageLogicalBytes: logicalBytes,
 		PartitionTable:    table,
@@ -57,7 +57,7 @@ func ReadWriteMap(path string) (WriteMap, error) {
 	return m, nil
 }
 
-func fileSize(path string) (uint64, error) {
+func FileSize(path string) (uint64, error) {
 	st, err := os.Stat(path)
 	if err != nil {
 		return 0, fmt.Errorf("failed to stat image: %w", err)
@@ -81,7 +81,7 @@ func readPartitionTable(path string) (PartitionTable, error) {
 
 	table := PartitionTable{SectorSize: sfdisk.PartitionTable.SectorSize}
 	if table.SectorSize == 0 {
-		table.SectorSize = sectorSize
+		table.SectorSize = SectorSize
 	}
 	for i, p := range sfdisk.PartitionTable.Partitions {
 		if p.Size == 0 {

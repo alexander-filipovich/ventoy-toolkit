@@ -1,4 +1,4 @@
-package main
+package host
 
 import (
 	"encoding/json"
@@ -7,24 +7,7 @@ import (
 	"strings"
 )
 
-type diskListResult struct {
-	WholeDisks []string `json:"WholeDisks"`
-}
-
-type diskInfo struct {
-	DeviceNode                       string `json:"DeviceNode"`
-	DeviceIdentifier                 string `json:"DeviceIdentifier"`
-	TotalSize                        uint64 `json:"TotalSize"`
-	MediaName                        string `json:"MediaName"`
-	VolumeName                       string `json:"VolumeName"`
-	IORegistryEntryName              string `json:"IORegistryEntryName"`
-	WholeDisk                        bool   `json:"WholeDisk"`
-	Internal                         bool   `json:"Internal"`
-	RemovableMediaOrExternalDevice   bool   `json:"RemovableMediaOrExternalDevice"`
-	PartitionMapPartitionOffsetBytes uint64 `json:"PartitionMapPartitionOffset"`
-}
-
-func normalizeDiskID(value string) (string, error) {
+func NormalizeDiskID(value string) (string, error) {
 	id := strings.TrimPrefix(strings.TrimPrefix(value, "/dev/"), "r")
 	if !strings.HasPrefix(id, "disk") || len(id) == len("disk") {
 		return "", fmt.Errorf("disk must look like /dev/diskN or diskN")
@@ -45,7 +28,7 @@ func ListExternalDisks() ([]Disk, error) {
 		return nil, fmt.Errorf("macOS only")
 	}
 
-	out, err := runPlistJSON("diskutil", "list", "-plist", "external", "physical")
+	out, err := RunPlistJSON("diskutil", "list", "-plist", "external", "physical")
 	if err != nil {
 		return nil, fmt.Errorf("failed to query disks: %w", err)
 	}
@@ -77,7 +60,7 @@ func ListExternalDisks() ([]Disk, error) {
 }
 
 func ValidateTargetDisk(diskID string) (Disk, error) {
-	id, err := normalizeDiskID(diskID)
+	id, err := NormalizeDiskID(diskID)
 	if err != nil {
 		return Disk{}, err
 	}
@@ -106,7 +89,7 @@ func ValidateTargetDisk(diskID string) (Disk, error) {
 	}, nil
 }
 
-func partitionOffset(path string) (uint64, bool) {
+func PartitionOffset(path string) (uint64, bool) {
 	info, err := readDiskInfo(path)
 	if err != nil || info.PartitionMapPartitionOffsetBytes == 0 {
 		return 0, false
@@ -115,7 +98,7 @@ func partitionOffset(path string) (uint64, bool) {
 }
 
 func readDiskInfo(id string) (diskInfo, error) {
-	out, err := runPlistJSON("diskutil", "info", "-plist", id)
+	out, err := RunPlistJSON("diskutil", "info", "-plist", id)
 	if err != nil {
 		return diskInfo{}, err
 	}
@@ -133,4 +116,19 @@ func firstNonEmpty(values ...string) string {
 		}
 	}
 	return ""
+}
+
+func humanBytes(bytes uint64) string {
+	switch {
+	case bytes >= 1<<40:
+		return fmt.Sprintf("%.2f TiB", float64(bytes)/(1<<40))
+	case bytes >= 1<<30:
+		return fmt.Sprintf("%.2f GiB", float64(bytes)/(1<<30))
+	case bytes >= 1<<20:
+		return fmt.Sprintf("%.2f MiB", float64(bytes)/(1<<20))
+	case bytes >= 1<<10:
+		return fmt.Sprintf("%.1f KiB", float64(bytes)/(1<<10))
+	default:
+		return fmt.Sprintf("%d B", bytes)
+	}
 }

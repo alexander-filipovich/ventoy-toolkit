@@ -1,33 +1,29 @@
-package main
+package writer
 
 import (
 	"fmt"
 	"os"
 	"path/filepath"
+
+	"github.com/alexanderfilipovich/ventoy-toolkit/cmd/ventoyctl/host"
+	"github.com/alexanderfilipovich/ventoy-toolkit/cmd/ventoyctl/ventoy"
 )
 
-type writeOptions struct {
-	MapPath string
-	Disk    string
-	Confirm string
-	DryRun  bool
-}
-
-func Write(opts writeOptions) error {
-	m, err := ReadWriteMap(opts.MapPath)
+func Write(opts Options) error {
+	m, err := ventoy.ReadWriteMap(opts.MapPath)
 	if err != nil {
 		return err
 	}
 
-	diskID, err := normalizeDiskID(opts.Disk)
+	diskID, err := host.NormalizeDiskID(opts.Disk)
 	if err != nil {
 		return err
 	}
 
-	var disk Disk
+	var disk host.Disk
 	if opts.DryRun {
-		disk = Disk{ID: diskID, Path: "/dev/" + diskID, SizeBytes: m.ImageLogicalBytes, SizeHuman: humanBytes(m.ImageLogicalBytes)}
-		if realDisk, err := ValidateTargetDisk(diskID); err == nil {
+		disk = host.Disk{ID: diskID, Path: "/dev/" + diskID, SizeBytes: m.ImageLogicalBytes, SizeHuman: HumanBytes(m.ImageLogicalBytes)}
+		if realDisk, err := host.ValidateTargetDisk(diskID); err == nil {
 			disk = realDisk
 		} else {
 			fmt.Fprintf(os.Stderr, "[ventoyctl] dry-run: disk info unavailable for /dev/%s, using image size for plan\n", diskID)
@@ -36,7 +32,7 @@ func Write(opts writeOptions) error {
 		if os.Geteuid() != 0 {
 			return fmt.Errorf("run as root (use sudo) for real writes")
 		}
-		disk, err = ValidateTargetDisk(diskID)
+		disk, err = host.ValidateTargetDisk(diskID)
 		if err != nil {
 			return err
 		}
@@ -52,7 +48,7 @@ func Write(opts writeOptions) error {
 	}
 
 	imagePath := resolveImagePath(opts.MapPath, m.ImagePath)
-	imageBytes, err := fileSize(imagePath)
+	imageBytes, err := ventoy.FileSize(imagePath)
 	if err != nil {
 		return err
 	}
@@ -89,7 +85,7 @@ func Write(opts writeOptions) error {
 		return err
 	}
 
-	_ = runInherit("diskutil", "unmountDisk", "force", disk.Path)
+	_ = host.RunInherit("diskutil", "unmountDisk", "force", disk.Path)
 	for _, r := range plan.Ranges {
 		source := r.Source
 		if source == "__IMAGE__" {
@@ -102,28 +98,28 @@ func Write(opts writeOptions) error {
 			return err
 		}
 	}
-	if err := runInherit("sync"); err != nil {
+	if err := host.RunInherit("sync"); err != nil {
 		return err
 	}
 
-	_ = runInherit("diskutil", "list", disk.Path)
-	if offset, ok := partitionOffset(disk.Path + "s1"); ok && offset != plan.P1.StartSector*sectorSize {
+	_ = host.RunInherit("diskutil", "list", disk.Path)
+	if offset, ok := host.PartitionOffset(disk.Path + "s1"); ok && offset != plan.P1.StartSector*ventoy.SectorSize {
 		return fmt.Errorf("%ss1 offset mismatch after write", disk.Path)
 	}
-	_ = runInherit("diskutil", "unmountDisk", "force", disk.Path)
-	if err := runInherit("diskutil", "eraseVolume", "ExFAT", "Ventoy", disk.Path+"s1"); err != nil {
+	_ = host.RunInherit("diskutil", "unmountDisk", "force", disk.Path)
+	if err := host.RunInherit("diskutil", "eraseVolume", "ExFAT", "Ventoy", disk.Path+"s1"); err != nil {
 		return err
 	}
-	return runInherit("sync")
+	return host.RunInherit("sync")
 }
 
 func copyRange(source, rawDisk string, r CopyRange) error {
-	if r.SrcOff%sectorSize != 0 || r.DstOff%sectorSize != 0 || r.Length%sectorSize != 0 {
+	if r.SrcOff%ventoy.SectorSize != 0 || r.DstOff%ventoy.SectorSize != 0 || r.Length%ventoy.SectorSize != 0 {
 		return fmt.Errorf("%s range is not sector-aligned", r.ID)
 	}
 	bs := bestBlockSize(r.SrcOff, r.DstOff, r.Length)
-	fmt.Fprintf(os.Stderr, "[ventoyctl] %s: %s -> %s length=%s\n", r.ID, source, rawDisk, humanBytes(r.Length))
-	return runInherit("dd",
+	fmt.Fprintf(os.Stderr, "[ventoyctl] %s: %s -> %s length=%s\n", r.ID, source, rawDisk, HumanBytes(r.Length))
+	return host.RunInherit("dd",
 		"if="+source,
 		"of="+rawDisk,
 		fmt.Sprintf("bs=%d", bs),

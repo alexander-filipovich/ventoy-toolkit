@@ -5,6 +5,10 @@ import (
 	"flag"
 	"fmt"
 	"os"
+
+	"github.com/alexanderfilipovich/ventoy-toolkit/cmd/ventoyctl/host"
+	"github.com/alexanderfilipovich/ventoy-toolkit/cmd/ventoyctl/ventoy"
+	"github.com/alexanderfilipovich/ventoy-toolkit/cmd/ventoyctl/writer"
 )
 
 func main() {
@@ -38,6 +42,11 @@ func usage() {
   ventoyctl write --map PATH --disk diskN [--confirm diskN] [--dry-run]`)
 }
 
+func fail(msg string) {
+	fmt.Fprintf(os.Stderr, "Error: %s\n", msg)
+	os.Exit(1)
+}
+
 func cmdListDisks(args []string) error {
 	fs := flag.NewFlagSet("list-disks", flag.ContinueOnError)
 	if err := fs.Parse(args); err != nil {
@@ -46,7 +55,7 @@ func cmdListDisks(args []string) error {
 		}
 		return err
 	}
-	disks, err := ListExternalDisks()
+	disks, err := host.ListExternalDisks()
 	if err != nil {
 		return err
 	}
@@ -70,7 +79,7 @@ func cmdMapImage(args []string) error {
 	if *image == "" || *partitionJSON == "" {
 		return fmt.Errorf("--image and --partition-json are required")
 	}
-	m, err := BuildWriteMap(*image, *imagePath, *partitionJSON)
+	m, err := ventoy.BuildWriteMap(*image, *imagePath, *partitionJSON)
 	if err != nil {
 		return err
 	}
@@ -94,5 +103,5 @@ func cmdWrite(args []string) error {
 	if *mapPath == "" || *disk == "" {
 		return fmt.Errorf("--map and --disk are required")
 	}
-	return Write(writeOptions{MapPath: *mapPath, Disk: *disk, Confirm: *confirm, DryRun: *dryRun})
+	return writer.Write(writer.Options{MapPath: *mapPath, Disk: *disk, Confirm: *confirm, DryRun: *dryRun})
 }

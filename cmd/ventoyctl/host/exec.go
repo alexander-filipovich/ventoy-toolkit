@@ -1,4 +1,4 @@
-package main
+package host
 
 import (
 	"bytes"
@@ -8,7 +8,7 @@ import (
 	"strings"
 )
 
-func runOut(name string, args ...string) ([]byte, error) {
+func RunOut(name string, args ...string) ([]byte, error) {
 	cmd := exec.Command(name, args...)
 	var stderr bytes.Buffer
 	cmd.Stderr = &stderr
@@ -22,7 +22,7 @@ func runOut(name string, args ...string) ([]byte, error) {
 	return out, nil
 }
 
-func runInherit(name string, args ...string) error {
+func RunInherit(name string, args ...string) error {
 	cmd := exec.Command(name, args...)
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
@@ -32,8 +32,8 @@ func runInherit(name string, args ...string) error {
 	return nil
 }
 
-func runPlistJSON(name string, args ...string) ([]byte, error) {
-	plistOut, err := runOut(name, args...)
+func RunPlistJSON(name string, args ...string) ([]byte, error) {
+	plistOut, err := RunOut(name, args...)
 	if err != nil {
 		return nil, err
 	}
@@ -51,9 +51,4 @@ func runPlistJSON(name string, args ...string) ([]byte, error) {
 		return nil, err
 	}
 	return jsonOut, nil
-}
-
-func fail(msg string) {
-	fmt.Fprintf(os.Stderr, "Error: %s\n", msg)
-	os.Exit(1)
 }

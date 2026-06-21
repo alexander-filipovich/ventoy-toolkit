@@ -1,8 +1,8 @@
-package main
+package ventoy
 
 const (
-	sectorSize = uint64(512)
-	mapSchema  = "ventoy-dev-image-write-map"
+	SectorSize = uint64(512)
+	MapSchema  = "ventoy-dev-image-write-map"
 )
 
 type WriteMap struct {
@@ -39,31 +39,4 @@ type Zone struct {
 	LengthBytes uint64 `json:"length_bytes"`
 	StartSector uint64 `json:"start_sector,omitempty"`
 	EndSector   uint64 `json:"end_sector,omitempty"`
-}
-
-type WritePlan struct {
-	Map         WriteMap
-	TargetBytes uint64
-	P1          Partition
-	P2          Partition
-	NewP1Size   uint64
-	NewP2Start  uint64
-	Ranges      []CopyRange
-	WriteBytes  uint64
-}
-
-type CopyRange struct {
-	ID     string
-	Source string
-	SrcOff uint64
-	DstOff uint64
-	Length uint64
-}
-
-type Disk struct {
-	ID        string
-	Path      string
-	SizeBytes uint64
-	SizeHuman string
-	Name      string
 }
