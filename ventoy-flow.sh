@@ -7,19 +7,19 @@ DEFAULT_IMAGE="./artifacts/ventoy-dev.img"
 
 source "${SCRIPTS_DIR}/common.sh"
 
-CMD="" DISK="" IMAGE="" OUTPUT="" SIZE="" SIZE_BYTES="" CONFIRM="" DRY_RUN=0
+CMD="" DISK="" IMAGE="" OUTPUT="" SIZE="" SIZE_BYTES="" CONFIRM="" DRY_RUN=0 FORCE=0 NO_BUILD="${NO_BUILD:-0}"
 
 fail() { echo "[flow][error] $*" >&2; exit 1; }
 
 usage() {
   cat >&2 <<'EOF'
 Usage:
-  ./ventoy-flow.sh [--disk diskN] [--confirm diskN] [--dry-run]
+  ./ventoy-flow.sh [--disk diskN] [--confirm diskN] [--no-build] [--dry-run]
   ./ventoy-flow.sh list
   ./ventoy-flow.sh build
-  ./ventoy-flow.sh create [--size 128m|--size-bytes N] [--output PATH] [--dry-run]
-  ./ventoy-flow.sh write --disk diskN [--image PATH] [--confirm diskN] [--dry-run]
-  ./ventoy-flow.sh all [--disk diskN] [--output PATH] [--confirm diskN] [--dry-run]
+  ./ventoy-flow.sh create [--size 128m|--size-bytes N] [--output PATH] [--force] [--no-build] [--dry-run]
+  ./ventoy-flow.sh write --disk diskN [--image PATH] [--confirm diskN] [--no-build] [--dry-run]
+  ./ventoy-flow.sh all [--disk diskN] [--output PATH] [--confirm diskN] [--force] [--no-build] [--dry-run]
 EOF
 }
 
@@ -67,6 +67,12 @@ run_create() {
   fi
   if (( DRY_RUN )); then
     args+=(--dry-run)
+  fi
+  if (( FORCE )); then
+    args+=(--force)
+  fi
+  if (( NO_BUILD )); then
+    args+=(--no-build)
   fi
 
   run_cmd "${SCRIPTS_DIR}/create-dev-image.sh" ${args[@]+"${args[@]}"}
@@ -130,6 +136,14 @@ while (($#)); do
       ;;
     --dry-run)
       DRY_RUN=1
+      shift
+      ;;
+    --force)
+      FORCE=1
+      shift
+      ;;
+    --no-build)
+      NO_BUILD=1
       shift
       ;;
     -h|--help)

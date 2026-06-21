@@ -11,6 +11,8 @@ SIZE_BYTES=""
 OUTPUT="./artifacts/ventoy-dev.img"
 DEFAULT_TARGET_MIB=64
 DRY_RUN=0
+FORCE=0
+NO_BUILD="${NO_BUILD:-0}"
 METADATA_PATH=""
 
 fail() { echo "[create-dev-image][error] $*" >&2; exit 1; }
@@ -20,6 +22,8 @@ usage() {
 Usage: scripts/create-dev-image.sh [options]
   --size-bytes N          Exact image size in bytes
   --output PATH
+  --force                 Recreate even if cached image verifies
+  --no-build              Run Go source without building ventoyctl binary
   --dry-run
   -h, --help
 EOF
@@ -35,6 +39,8 @@ while (($#)); do
       esac
       shift 2
       ;;
+    --force) FORCE=1; shift ;;
+    --no-build) NO_BUILD=1; shift ;;
     --dry-run) DRY_RUN=1; shift ;;
     -h|--help) usage; exit 0 ;;
     *) usage; fail "unknown argument: $1" ;;
@@ -68,8 +74,22 @@ if ((DRY_RUN)); then
   exit 0
 fi
 
+if (( ! FORCE )) && [[ -f "${OUTPUT_ABS}" && -f "${METADATA_PATH}" ]]; then
+  EXISTING_BYTES="$(stat -f%z "${OUTPUT_ABS}")"
+  if [[ "${EXISTING_BYTES}" == "${TARGET_BYTES}" ]] && verify_checksum "${OUTPUT_ABS}" && verify_checksum "${METADATA_PATH}"; then
+    echo "[create-dev-image] cached image verified; skipping create" >&2
+    echo "[create-dev-image] write_map=${METADATA_PATH}" >&2
+    echo "[create-dev-image] status=cached" >&2
+    exit 0
+  fi
+  echo "[create-dev-image] cached image missing checksum or changed; recreating" >&2
+fi
+
 command -v docker >/dev/null 2>&1 || fail "docker not found"
 docker compose version >/dev/null 2>&1 || fail "docker compose is not available"
+if (( ! NO_BUILD )); then
+  ensure_ventoyctl
+fi
 docker compose -f "${COMPOSE_FILE}" build ventoy >/dev/null
 
 mkdir -p "$(dirname "${OUTPUT_ABS}")"
@@ -92,6 +112,9 @@ run_ventoyctl map-image \
   --image-path "${OUTPUT_REL}" \
   --partition-json "${PARTITION_JSON_ABS}" \
   > "${METADATA_PATH}"
+
+write_checksum "${OUTPUT_ABS}"
+write_checksum "${METADATA_PATH}"
 
 echo "[create-dev-image] image_logical_bytes=${IMAGE_LOGICAL_BYTES}" >&2
 echo "[create-dev-image] image_allocated_bytes=${IMAGE_ALLOCATED_BYTES}" >&2
