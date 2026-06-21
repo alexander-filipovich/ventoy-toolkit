@@ -21,6 +21,8 @@ func main() {
 	switch os.Args[1] {
 	case "list-disks":
 		err = cmdListDisks(os.Args[2:])
+	case "select-disk":
+		err = cmdSelectDisk(os.Args[2:])
 	case "map-image":
 		err = cmdMapImage(os.Args[2:])
 	case "write":
@@ -38,6 +40,7 @@ func main() {
 func usage() {
 	fmt.Fprintln(os.Stderr, `Usage:
   ventoyctl list-disks
+  ventoyctl select-disk [--dry-run]
   ventoyctl map-image --image PATH --image-path PATH --partition-json PATH
   ventoyctl write --map PATH --disk diskN [--confirm diskN] [--dry-run]`)
 }
@@ -62,6 +65,23 @@ func cmdListDisks(args []string) error {
 	for _, disk := range disks {
 		fmt.Printf("%s\t%s\t%s\n", disk.Path, disk.SizeHuman, disk.Name)
 	}
+	return nil
+}
+
+func cmdSelectDisk(args []string) error {
+	fs := flag.NewFlagSet("select-disk", flag.ContinueOnError)
+	dryRun := fs.Bool("dry-run", false, "Print placeholder without querying disks")
+	if err := fs.Parse(args); err != nil {
+		if err == flag.ErrHelp {
+			return nil
+		}
+		return err
+	}
+	diskID, err := host.SelectDisk(os.Stdin, os.Stderr, *dryRun)
+	if err != nil {
+		return err
+	}
+	fmt.Println(diskID)
 	return nil
 }
 

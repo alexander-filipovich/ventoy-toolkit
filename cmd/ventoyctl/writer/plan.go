@@ -59,7 +59,7 @@ func PatchedMBR(imagePath string, plan WritePlan) ([]byte, error) {
 
 func validateMap(m ventoy.WriteMap, targetBytes uint64) error {
 	if m.Schema != ventoy.MapSchema {
-		return fmt.Errorf("unsupported write-map schema")
+		return fmt.Errorf("unsupported write-map schema %q, expected %q", m.Schema, ventoy.MapSchema)
 	}
 	if m.ImagePath == "" || m.ImageLogicalBytes == 0 {
 		return fmt.Errorf("write-map image fields are empty")
@@ -67,16 +67,31 @@ func validateMap(m ventoy.WriteMap, targetBytes uint64) error {
 	if m.PartitionTable.SectorSize != ventoy.SectorSize {
 		return fmt.Errorf("only 512-byte sector maps are supported")
 	}
-	if len(m.PartitionTable.Partitions) < 2 {
-		return fmt.Errorf("write-map must contain two partitions")
+	if len(m.PartitionTable.Partitions) != 2 {
+		return fmt.Errorf("write-map must contain exactly two partitions")
 	}
 	if targetBytes%ventoy.SectorSize != 0 {
 		return fmt.Errorf("target size is not sector-aligned")
 	}
 
 	p1, p2 := m.PartitionTable.Partitions[0], m.PartitionTable.Partitions[1]
-	if p1.TypeHex != "0x07" || p2.TypeHex != "0xef" {
-		return fmt.Errorf("unexpected partition types: p1=%s p2=%s", p1.TypeHex, p2.TypeHex)
+	if p1.Index != 1 || p2.Index != 2 {
+		return fmt.Errorf("unexpected partition indexes: p1=%d p2=%d", p1.Index, p2.Index)
+	}
+	if p1.TypeHex != "0x07" {
+		return fmt.Errorf("partition 1 must be type 0x07, got %s", p1.TypeHex)
+	}
+	if p2.TypeHex != "0xef" {
+		return fmt.Errorf("partition 2 must be type 0xef, got %s", p2.TypeHex)
+	}
+	if !p1.Bootable {
+		return fmt.Errorf("partition 1 must be bootable")
+	}
+	if p1.StartSector == 0 || p1.OffsetBytes != p1.StartSector*ventoy.SectorSize {
+		return fmt.Errorf("partition 1 start must be non-zero and sector-aligned")
+	}
+	if p1.StartSector+p1.SizeSectors != p2.StartSector {
+		return fmt.Errorf("partition 1 and partition 2 must be contiguous")
 	}
 	if p1.OffsetBytes != m.DerivedZones.PreP1.LengthBytes || p2.OffsetBytes != m.DerivedZones.P2VtoyEFI.OffsetBytes {
 		return fmt.Errorf("derived zones do not match partition table")
@@ -84,11 +99,20 @@ func validateMap(m ventoy.WriteMap, targetBytes uint64) error {
 	if m.DerivedZones.PreP1.LengthBytes < ventoy.SectorSize {
 		return fmt.Errorf("pre_p1 zone is smaller than one sector")
 	}
+	if m.DerivedZones.PreP1.OffsetBytes != 0 || m.DerivedZones.PreP1.StartSector != 0 || m.DerivedZones.PreP1.EndSector != p1.StartSector-1 {
+		return fmt.Errorf("pre_p1 zone does not match partition 1 start")
+	}
 	if m.DerivedZones.P1Data.OffsetBytes != p1.OffsetBytes || m.DerivedZones.P1Data.LengthBytes != p1.LengthBytes {
 		return fmt.Errorf("p1_data zone does not match partition 1")
 	}
+	if m.DerivedZones.P1Data.StartSector != p1.StartSector || m.DerivedZones.P1Data.EndSector != p2.StartSector-1 {
+		return fmt.Errorf("p1_data zone sectors do not match partition 1")
+	}
 	if m.DerivedZones.P2VtoyEFI.LengthBytes != p2.LengthBytes {
 		return fmt.Errorf("p2_vtoyefi zone does not match partition 2")
+	}
+	if m.DerivedZones.P2VtoyEFI.StartSector != p2.StartSector || m.DerivedZones.P2VtoyEFI.EndSector != p2.StartSector+p2.SizeSectors-1 {
+		return fmt.Errorf("p2_vtoyefi zone sectors do not match partition 2")
 	}
 	return nil
 }

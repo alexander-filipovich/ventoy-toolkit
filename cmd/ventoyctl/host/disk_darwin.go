@@ -3,6 +3,7 @@ package host
 import (
 	"encoding/json"
 	"fmt"
+	"io"
 	"runtime"
 	"strings"
 )
@@ -57,6 +58,26 @@ func ListExternalDisks() ([]Disk, error) {
 		})
 	}
 	return disks, nil
+}
+
+func SelectDisk(stdin io.Reader, stderr io.Writer, dryRun bool) (string, error) {
+	if dryRun {
+		fmt.Fprintln(stderr, "[ventoyctl] dry-run: would list disks and ask for disk id")
+		return "diskN", nil
+	}
+	disks, err := ListExternalDisks()
+	if err != nil {
+		return "", err
+	}
+	for _, disk := range disks {
+		fmt.Fprintf(stderr, "%s\t%s\t%s\n", disk.Path, disk.SizeHuman, disk.Name)
+	}
+	fmt.Fprint(stderr, "Target disk [diskN]: ")
+	var diskID string
+	if _, err := fmt.Fscan(stdin, &diskID); err != nil {
+		return "", fmt.Errorf("failed to read target disk: %w", err)
+	}
+	return NormalizeDiskID(diskID)
 }
 
 func ValidateTargetDisk(diskID string) (Disk, error) {

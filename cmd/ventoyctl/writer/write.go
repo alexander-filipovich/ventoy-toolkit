@@ -110,7 +110,14 @@ func Write(opts Options) error {
 	if err := host.RunInherit("diskutil", "eraseVolume", "ExFAT", "Ventoy", disk.Path+"s1"); err != nil {
 		return err
 	}
-	return host.RunInherit("sync")
+	if err := host.RunInherit("sync"); err != nil {
+		return err
+	}
+	if err := verifyTargetMBR(rawDisk, patch); err != nil {
+		return err
+	}
+	fmt.Fprintln(os.Stderr, "[ventoyctl] post-format MBR verification passed")
+	return nil
 }
 
 func copyRange(source, rawDisk string, r CopyRange) error {

@@ -85,7 +85,7 @@ func readPartitionTable(path string) (PartitionTable, error) {
 	}
 	for i, p := range sfdisk.PartitionTable.Partitions {
 		if p.Size == 0 {
-			continue
+			return PartitionTable{}, fmt.Errorf("partition %d has zero size", i+1)
 		}
 		table.Partitions = append(table.Partitions, Partition{
 			Index:       i + 1,
@@ -97,15 +97,15 @@ func readPartitionTable(path string) (PartitionTable, error) {
 			LengthBytes: p.Size * table.SectorSize,
 		})
 	}
-	if len(table.Partitions) < 2 {
-		return PartitionTable{}, errors.New("expected at least two partitions")
+	if len(table.Partitions) != 2 {
+		return PartitionTable{}, fmt.Errorf("expected exactly two partitions, got %d", len(table.Partitions))
 	}
 	return table, nil
 }
 
 func derivedZones(table PartitionTable) (DerivedZones, error) {
-	if len(table.Partitions) < 2 {
-		return DerivedZones{}, errors.New("expected two partitions")
+	if len(table.Partitions) != 2 {
+		return DerivedZones{}, fmt.Errorf("expected exactly two partitions, got %d", len(table.Partitions))
 	}
 	p1, p2 := table.Partitions[0], table.Partitions[1]
 	return DerivedZones{

@@ -5,6 +5,8 @@ PROJECT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 SCRIPTS_DIR="${PROJECT_ROOT}/scripts"
 DEFAULT_IMAGE="./artifacts/ventoy-dev.img"
 
+source "${SCRIPTS_DIR}/common.sh"
+
 CMD="" DISK="" IMAGE="" OUTPUT="" SIZE="" SIZE_BYTES="" CONFIRM="" DRY_RUN=0
 
 fail() { echo "[flow][error] $*" >&2; exit 1; }
@@ -14,17 +16,11 @@ usage() {
 Usage:
   ./ventoy-flow.sh [--disk diskN] [--confirm diskN] [--dry-run]
   ./ventoy-flow.sh list
+  ./ventoy-flow.sh build
   ./ventoy-flow.sh create [--size 128m|--size-bytes N] [--output PATH] [--dry-run]
   ./ventoy-flow.sh write --disk diskN [--image PATH] [--confirm diskN] [--dry-run]
   ./ventoy-flow.sh all [--disk diskN] [--output PATH] [--confirm diskN] [--dry-run]
 EOF
-}
-
-go_ventoyctl() {
-  (
-    cd "${PROJECT_ROOT}"
-    GOCACHE="${GOCACHE:-${PROJECT_ROOT}/.cache/go-build}" go run ./cmd/ventoyctl "$@"
-  )
 }
 
 parse_size_to_bytes() {
@@ -45,14 +41,11 @@ parse_size_to_bytes() {
 }
 
 select_disk() {
+  local args=(select-disk)
   if (( DRY_RUN )); then
-    echo "[flow] dry-run: would list disks and ask for disk id" >&2
-    DISK="diskN"
-    return
+    args+=(--dry-run)
   fi
-  go_ventoyctl list-disks >&2
-  printf 'Target disk [diskN]: ' >&2
-  read -r DISK
+  DISK="$(run_ventoyctl "${args[@]}")"
   [[ -n "$DISK" ]] || fail "selector returned empty disk"
 }
 
@@ -76,7 +69,7 @@ run_create() {
     args+=(--dry-run)
   fi
 
-  "${SCRIPTS_DIR}/create-dev-image.sh" "${args[@]}"
+  run_cmd "${SCRIPTS_DIR}/create-dev-image.sh" ${args[@]+"${args[@]}"}
 }
 
 run_write() {
@@ -94,7 +87,7 @@ run_write() {
     args+=(--dry-run)
   fi
 
-  go_ventoyctl "${args[@]}"
+  run_ventoyctl "${args[@]}"
 }
 
 run_all() {
@@ -104,6 +97,10 @@ run_all() {
     select_disk
   fi
   IMAGE="$OUTPUT"
+  if (( DRY_RUN )); then
+    echo "[flow] dry-run: would write ${IMAGE} to ${DISK}" >&2
+    return
+  fi
   run_write
 }
 
@@ -114,7 +111,7 @@ fi
 
 while (($#)); do
   case "$1" in
-    list|create|write|all)
+    list|build|create|write|all)
       [[ -z "$CMD" ]] || fail "command already set: ${CMD}"
       CMD="$1"
       shift
@@ -146,7 +143,8 @@ while (($#)); do
 done
 
 case "$CMD" in
-  list) go_ventoyctl list-disks ;;
+  list) run_ventoyctl list-disks ;;
+  build) run_cmd "${SCRIPTS_DIR}/build-binaries.sh" ;;
   create) run_create ;;
   write) run_write ;;
   ""|all) run_all ;;

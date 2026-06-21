@@ -2,7 +2,7 @@ package ventoy
 
 const (
 	SectorSize = uint64(512)
-	MapSchema  = "ventoy-dev-image-write-map"
+	MapSchema  = "ventoy-toolkit-mbr-transplant-map"
 )
 
 type WriteMap struct {
